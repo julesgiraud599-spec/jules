@@ -1,0 +1,248 @@
+// Glacier — schéma de données.
+// SQLite en local. Pour Supabase/Postgres : provider = "postgresql" et DATABASE_URL Postgres.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String?
+  passwordHash  String
+  createdAt     DateTime @default(now())
+
+  // Paramètres
+  contributionRate  Float   @default(12.3) // cotisations micro-entreprise vente (%)
+  packagingCost     Float   @default(0.3)  // coût emballage par vente (€)
+  repeatCooldownDays Int    @default(14)   // délai avant qu'un produit puisse revenir dans la sélection
+  minDailyScore     Float   @default(0)
+  webhookUrl        String? // Discord / Slack / ntfy
+  lastDailyRunAt    DateTime?
+
+  products      Product[]
+  listings      VintedListing[]
+  selections    DailySelection[]
+  saved         SavedProduct[]
+  notifications Notification[]
+  sales         Sale[]
+  expenses      Expense[]
+  inventory     InventoryItem[]
+  jobs          JobRun[]
+}
+
+// Une "opportunité" : un type de produit observé sur Vinted, rattaché à des offres fournisseurs.
+model Product {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  category    String
+  keywords    String   // requête de recherche (Vinted + fournisseurs)
+  imageUrl    String?
+  notes       String?
+
+  // Nombre d'annonces similaires sur Vinted (lu sur la page de recherche Vinted), null = non disponible
+  competitorCount       Int?
+  competitorCountAt     DateTime?
+
+  // Champs calculés (moteur de score), mis à jour à chaque recalcul
+  score            Float?
+  scoreConfidence  Float?   // part des critères disposant de données (0-100)
+  scoreBreakdown   String?  // JSON
+  avgVintedPrice   Float?
+  recommendedPrice Float?
+  purchasePrice    Float?
+  grossMargin      Float?
+  marginPct        Float?
+  totalFavorites   Int?
+  demandLevel      String?  // "Forte" | "Moyenne" | "Faible" | null
+  competitionLevel String?
+  computedAt       DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  listings    VintedListing[]
+  offers      SupplierOffer[]
+  analyses    AIAnalysis[]
+  selectionItems DailySelectionItem[]
+  savedBy     SavedProduct[]
+  competitorSnapshots CompetitorSnapshot[]
+
+  @@index([userId, score])
+}
+
+model CompetitorSnapshot {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  count      Int
+  capturedAt DateTime @default(now())
+}
+
+// Annonce Vinted observée par l'utilisateur (aucune donnée inventée : tout champ inconnu reste null).
+model VintedListing {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId  String?
+  product    Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  url        String
+  title      String
+  price      Float
+  favorites  Int?
+  views      Int?
+  status     String   @default("ACTIVE") // ACTIVE | SOLD | UNKNOWN
+  soldAt     DateTime?
+  photoUrl   String?
+  category   String?
+  firstSeenAt DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  snapshots  ListingSnapshot[]
+
+  @@unique([userId, url])
+}
+
+model ListingSnapshot {
+  id         String   @id @default(cuid())
+  listingId  String
+  listing    VintedListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  favorites  Int?
+  views      Int?
+  price      Float
+  status     String
+  capturedAt DateTime @default(now())
+}
+
+model SupplierOffer {
+  id          String   @id @default(cuid())
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier    String   // ALIEXPRESS | TEMU | SHEIN
+  title       String
+  url         String
+  price       Float
+  shipping    Float?
+  imageUrl    String?
+  externalId  String?
+  salesVolume Int?     // fourni par l'API AliExpress (ventes 30 jours) quand disponible
+  rating      String?
+  source      String   // API | MANUAL
+  confirmed   Boolean  @default(false) // correspondance vérifiée par l'utilisateur
+  fetchedAt   DateTime @default(now())
+
+  @@unique([productId, supplier, url])
+}
+
+model AIAnalysis {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  content    String   // JSON
+  model      String
+  createdAt  DateTime @default(now())
+}
+
+model DailySelection {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      String   // YYYY-MM-DD
+  createdAt DateTime @default(now())
+  note      String?
+  items     DailySelectionItem[]
+
+  @@unique([userId, date])
+}
+
+model DailySelectionItem {
+  id          String   @id @default(cuid())
+  selectionId String
+  selection   DailySelection @relation(fields: [selectionId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  rank        Int
+  score       Float
+}
+
+model SavedProduct {
+  userId    String
+  user      User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@id([userId, productId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+}
+
+model Sale {
+  id           String   @id @default(cuid())
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date         DateTime
+  title        String
+  salePrice    Float
+  purchaseCost Float
+  shippingCost Float    @default(0) // frais de port à la charge du vendeur
+  fees         Float    @default(0)
+  packaging    Float    @default(0)
+  refunded     Boolean  @default(false)
+  refundAmount Float    @default(0)
+  quantity     Int      @default(1)
+  inventoryItemId String?
+  inventoryItem   InventoryItem? @relation(fields: [inventoryItemId], references: [id], onDelete: SetNull)
+  notes        String?
+  createdAt    DateTime @default(now())
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date      DateTime
+  label     String
+  category  String   // STOCK | EMBALLAGE | ABONNEMENT | ENVOI | AUTRE
+  amount    Float
+  createdAt DateTime @default(now())
+}
+
+model InventoryItem {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name      String
+  supplier  String?
+  quantity  Int
+  unitCost  Float
+  createdAt DateTime @default(now())
+  sales     Sale[]
+}
+
+model JobRun {
+  id         String   @id @default(cuid())
+  userId     String?
+  user       User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  status     String   // RUNNING | SUCCESS | PARTIAL | ERROR
+  log        String   @default("")
+  error      String?
+  startedAt  DateTime @default(now())
+  finishedAt DateTime?
+}

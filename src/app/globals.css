@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root { color-scheme: dark; }
+html, body { background: #09090b; color: #e7e7ea; }
+body { font-feature-settings: "cv11", "ss01"; -webkit-font-smoothing: antialiased; }
+::selection { background: #0c4a6e; }
+
+@layer components {
+  .card { @apply rounded-xl border border-line bg-panel; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed; }
+  .btn-primary { @apply btn bg-ice text-zinc-950 hover:bg-sky-200; }
+  .btn-ghost { @apply btn border border-line bg-panel2 text-zinc-200 hover:bg-zinc-800; }
+  .btn-danger { @apply btn border border-red-900/60 bg-red-950/40 text-red-300 hover:bg-red-950; }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs; }
+  .input { @apply w-full rounded-lg border border-line bg-panel2 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 outline-none focus:border-ice/60 focus:ring-2 focus:ring-ice/15 transition; }
+  .label { @apply mb-1.5 block text-xs font-medium text-muted; }
+  .th { @apply px-3 py-2.5 text-left text-[11px] font-medium uppercase tracking-wider text-muted; }
+  .td { @apply px-3 py-2.5 text-sm border-t border-line; }
+  .badge { @apply inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[11px] font-medium; }
+  .h1 { @apply text-xl font-semibold tracking-tight text-zinc-50; }
+  .sub { @apply text-sm text-muted; }
+}
+
+/* Empêche les tableaux larges de faire déborder les colonnes de grille (mobile) */
+@layer base { .grid > * { min-width: 0; } }
