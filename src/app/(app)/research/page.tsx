@@ -16,7 +16,7 @@ export default async function Research({ searchParams }: { searchParams: Promise
   const user = await requireUser();
   const where: Prisma.ProductWhereInput = { userId: user.id };
   const and: Prisma.ProductWhereInput[] = [];
-  if (sp.q) and.push({ OR: [{ name: { contains: sp.q } }, { keywords: { contains: sp.q } }, { category: { contains: sp.q } }] });
+  if (sp.q) and.push({ OR: [{ name: { contains: sp.q, mode: "insensitive" } }, { keywords: { contains: sp.q, mode: "insensitive" } }, { category: { contains: sp.q, mode: "insensitive" } }] });
   if (sp.category) and.push({ category: sp.category });
   if (sp.supplier) and.push({ offers: { some: { supplier: sp.supplier } } });
   if (n(sp.maxBuy) !== undefined) and.push({ purchasePrice: { lte: n(sp.maxBuy) } });

@@ -31,9 +31,13 @@ SaaS Next.js 15 / TypeScript / Prisma pour repérer des produits **sans marque**
 
 ## 3. Installation
 
+Mise en ligne (Vercel + Supabase) : voir **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
+
+En local (il faut un PostgreSQL : Supabase gratuit ou Postgres installé) :
+
 ```bash
 npm install
-cp .env.example .env    # puis renseigner AUTH_SECRET (openssl rand -hex 32) et CRON_SECRET
+cp .env.example .env    # renseigner DATABASE_URL, DIRECT_URL, AUTH_SECRET (openssl rand -hex 32), CRON_SECRET
 npx prisma db push
 npm run dev             # http://localhost:3000
 ```
@@ -51,9 +55,9 @@ Trois façons de la lancer, au choix :
 
 Bouton manuel : page **Produits du jour**, « Lancer / Régénérer la sélection ». Le journal de chaque exécution se trouve dans **Historique**.
 
-## 5. Passer sur Supabase (Postgres)
+## 5. Base de données
 
-Dans `prisma/schema.prisma`, mettez `provider = "postgresql"`, puis `DATABASE_URL` = chaîne de connexion Supabase (pooler), puis `npx prisma db push`. Aucun autre changement n'est nécessaire.
+PostgreSQL via Prisma. Supabase en production : `DATABASE_URL` = pooler (port 6543, `?pgbouncer=true`), `DIRECT_URL` = connexion directe ou « Session » (port 5432). Les tables sont créées automatiquement au déploiement (`npm run vercel-build` → `prisma db push`).
 
 ## 6. Tests
 

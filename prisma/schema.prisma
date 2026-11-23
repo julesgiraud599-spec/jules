@@ -1,13 +1,14 @@
 // Glacier — schéma de données.
-// SQLite en local. Pour Supabase/Postgres : provider = "postgresql" et DATABASE_URL Postgres.
+// PostgreSQL (Supabase en production, ou Postgres local).
 
 generator client {
   provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")  // Supabase : URL du pooler (port 6543, ?pgbouncer=true)
+  directUrl = env("DIRECT_URL")    // Supabase : connexion directe (port 5432), utilisée pour créer les tables
 }
 
 model User {
