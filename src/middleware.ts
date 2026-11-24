@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
-const PUBLIC = ["/login", "/register", "/api/cron"];
+const PUBLIC = ["/login", "/register", "/api/cron", "/api/chrome"]; // /api/chrome : authentification par clé d API (Bearer)
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

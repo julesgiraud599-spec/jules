@@ -6,6 +6,7 @@ import { checkLink, type Supplier } from "./links";
 import { computeMatch, compareImages, type Visual } from "./matching";
 import { notify } from "./notify";
 import { dayKey, NA } from "./format";
+import { enqueueJobs, expireJobs } from "./chrome";
 
 const productInclude = {
   listings: { include: { snapshots: true } },
@@ -189,7 +190,11 @@ export async function runDaily(userId: string, opts: { force?: boolean } = {}) {
   try {
     const products = await db.product.findMany({ where: { userId } });
     say(`${products.length} produit(s) suivi(s).`);
-    say("Vinted : aucune API publique ni accès autorisé — les annonces proviennent de vos relevés (saisie ou import).");
+    say("Vinted : aucune API publique — les annonces proviennent de vos relevés ou de la recherche Chrome (extension, dans votre navigateur).");
+    const expired = await expireJobs(userId);
+    if (expired) say(`Recherche Chrome : ${expired} recherche(s) expirée(s) — Chrome n'était pas ouvert avec l'extension connectée.`);
+    const kws = (user.chromeKeywords ?? "").split(/\n|,/).map((k) => k.trim()).filter(Boolean);
+    if (kws.length) say(`Recherche Chrome : ${await enqueueJobs(userId, kws, "DAILY")} recherche(s) mise(s) en file. Elles s'exécuteront dès que Chrome sera ouvert avec l'extension (résultats visibles dans « Recherche Chrome »).`);
 
     if (aliexpressConfigured()) {
       for (const p of products) {

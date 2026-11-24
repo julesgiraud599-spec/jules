@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "glacier-chrome": {
+      "command": "node",
+      "args": ["bridge/index.js"],
+      "env": {
+        "GLACIER_URL": "${GLACIER_URL}",
+        "GLACIER_API_KEY": "${GLACIER_API_KEY}"
+      }
+    }
+  }
+}

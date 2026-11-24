@@ -4,6 +4,7 @@ import { aliexpressConfigured } from "@/lib/aliexpress";
 import { PageHeader, Section } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/action-form";
 import { updateSettingsAction, changePasswordAction, testWebhookAction } from "@/app/actions";
+import { generateApiKeyAction, saveChromeKeywordsAction } from "@/app/chrome-actions";
 
 export default async function Settings() {
   const user = await requireUser();
@@ -34,6 +35,20 @@ export default async function Settings() {
               <li className="flex justify-between gap-3"><span>Vinted<div className="text-xs text-muted">Pas d&apos;API publique, annonces relevées par vous (saisie ou import CSV)</div></span><span className="text-muted">Manuel</span></li>
             </ul>
           </Section>
+          <section id="chrome"><Section title="Recherche Chrome (extension)">
+            <ol className="list-decimal space-y-1 pl-4 text-xs text-muted">
+              <li>Créez une clé d&apos;API ci-dessous et copiez-la.</li>
+              <li>Dans l&apos;extension Glacier, ouvrez Réglages, puis collez l&apos;adresse de ce site et la clé.</li>
+              <li>Gardez Chrome ouvert : les recherches en file s&apos;exécutent automatiquement.</li>
+            </ol>
+            <p className="mt-2 text-xs">{user.apiKeyPrefix ? <>Clé active : <code className="text-ice">{user.apiKeyPrefix}…</code> (générer une nouvelle clé désactive l&apos;ancienne)</> : "Aucune clé d'API."}</p>
+            <ActionForm action={generateApiKeyAction} className="mt-2"><Submit variant="ghost" className="btn-sm">{user.apiKeyPrefix ? "Générer une nouvelle clé" : "Créer une clé d'API"}</Submit></ActionForm>
+            <ActionForm action={saveChromeKeywordsAction} className="mt-4 space-y-2">
+              <label className="label" htmlFor="chromeKeywords">Mots-clés recherchés chaque jour dans Chrome (un par ligne, 15 max)</label>
+              <textarea id="chromeKeywords" name="chromeKeywords" rows={4} defaultValue={user.chromeKeywords ?? ""} className="input" placeholder={"pince à cheveux XXL\nécharpe à franges"} />
+              <Submit variant="ghost" className="btn-sm">Enregistrer</Submit>
+            </ActionForm>
+          </Section></section>
           <Section title="Mot de passe">
             <ActionForm action={changePasswordAction} resetOnSuccess className="space-y-3">
               <input name="current" type="password" placeholder="Mot de passe actuel" required className="input" autoComplete="current-password" />

@@ -60,6 +60,10 @@ Les critères sans données sont exclus. Le score est ensuite multiplié par `0,
 - Temu et SHEIN n'ont pas d'API catalogue : leurs liens se confirment à la main.
 - La recherche par image n'existe pas dans l'API Affiliés AliExpress standard. La correspondance visuelle se fait donc sur les candidats trouvés par mots-clés.
 
+## 2 bis. Recherche Chrome
+
+Extension Chrome, serveur MCP local pour Claude Code et page « Recherche Chrome » dans Glacier : installation et utilisation dans **[CHROME.md](CHROME.md)**.
+
 ## 3. Fonctionnalités
 
 - **Product Research** : fiches produit, annonces Vinted suivies avec historique des relevés, nombre d'annonces concurrentes, offres fournisseurs (API AliExpress ou saisie), filtres (fournisseur, catégorie, prix d'achat max, revente min/max, marge min, favoris, score, concurrence, ancienneté) et barre de recherche.

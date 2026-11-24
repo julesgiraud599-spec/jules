@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8"><title>Glacier</title><link rel="stylesheet" href="popup.css"></head>
+<body>
+  <header><span class="logo">G</span><b>Glacier</b><span id="busy" class="pill" hidden>Recherche en cours…</span></header>
+
+  <section>
+    <h2>Connexions</h2>
+    <div class="row"><span class="dot" id="dotBridge"></span>Claude Code <span id="bridgeTxt" class="muted"></span></div>
+    <div class="row"><span class="dot" id="dotGlacier"></span>Glacier <span id="glacierTxt" class="muted"></span></div>
+    <label class="check"><input type="checkbox" id="allowClaude"> Autoriser Claude Code à piloter Chrome</label>
+    <p class="hint">Désactivé : Claude Code ne peut ni ouvrir ni lire d'onglet.</p>
+  </section>
+
+  <section>
+    <h2>Sites</h2>
+    <ul id="sites" class="sites"></ul>
+  </section>
+
+  <section>
+    <h2>Recherche</h2>
+    <div class="row"><input id="kw" placeholder="ex. pince à cheveux XXL"><button id="run" class="pri">Lancer une recherche</button></div>
+    <button id="analyze">Analyser cette page</button>
+    <label class="check"><input type="checkbox" id="sendPage" checked> Envoyer le résultat à Glacier</label>
+    <pre id="out" class="out" hidden></pre>
+  </section>
+
+  <section>
+    <h2>Historique</h2>
+    <ul id="history" class="history"></ul>
+  </section>
+
+  <details>
+    <summary>Réglages</summary>
+    <label>Jeton du pont Claude Code<input id="bridgeToken" type="password" placeholder="glacier-bridge token"></label>
+    <label>Port du pont<input id="bridgePort" type="number" value="8765"></label>
+    <label>Adresse de Glacier<input id="glacierUrl" placeholder="https://votre-glacier.vercel.app"></label>
+    <label>Clé d'API Glacier<input id="glacierApiKey" type="password" placeholder="glc_…"></label>
+    <div class="row"><button id="save" class="pri">Enregistrer</button><button id="test">Tester Glacier</button></div>
+    <p class="hint">Aucun cookie, mot de passe ni jeton de session n'est envoyé : seulement les données produit lues dans les pages.</p>
+  </details>
+  <script type="module" src="popup.js"></script>
+</body></html>

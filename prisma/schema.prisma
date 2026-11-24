@@ -26,6 +26,12 @@ model User {
   webhookUrl        String? // Discord / Slack / ntfy
   lastDailyRunAt    DateTime?
 
+  // Recherche Chrome
+  apiKeyHash        String?  @unique // empreinte SHA-256 de la clé d'API (la clé n'est jamais stockée en clair)
+  apiKeyPrefix      String?
+  chromeKeywords    String?  // mots-clés recherchés chaque jour via l'extension (un par ligne)
+  chromeLastSeenAt  DateTime?
+
   products      Product[]
   listings      VintedListing[]
   selections    DailySelection[]
@@ -35,6 +41,7 @@ model User {
   expenses      Expense[]
   inventory     InventoryItem[]
   jobs          JobRun[]
+  chromeJobs    ChromeJob[]
 }
 
 // Une "opportunité" : un type de produit observé sur Vinted, rattaché à des offres fournisseurs.
@@ -263,4 +270,55 @@ model JobRun {
   error      String?
   startedAt  DateTime @default(now())
   finishedAt DateTime?
+}
+
+// Recherche menée dans Chrome par l'extension Glacier (file d'attente + résultat)
+model ChromeJob {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  keyword     String
+  source      String   // DASHBOARD | DAILY | MCP | POPUP | PAGE
+  status      String   // QUEUED | RUNNING | DONE | PARTIAL | BLOCKED | EXPIRED | ERROR
+  error       String?
+  log         String   @default("")
+  resultCount Int?     // nombre total d'annonces affiché par Vinted
+  vintedRead  Int?
+  medianPrice Float?
+  favorites   Int?
+  blocked     String?  // JSON : sites bloqués et raison
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  expiresAt   DateTime?
+  items       ChromeItem[]
+
+  @@index([userId, createdAt])
+}
+
+model ChromeItem {
+  id          String   @id @default(cuid())
+  jobId       String
+  job         ChromeJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  role        String   // VINTED | SUPPLIER
+  site        String   // VINTED | ALIEXPRESS | TEMU
+  externalId  String?
+  url         String
+  title       String?
+  price       Float?
+  favorites   Int?
+  orders      Int?     // ventes affichées par le fournisseur
+  photos      String   @default("[]") // JSON
+  seller      String?
+  available   Boolean?
+  linkStatus  String   @default("PENDING") // VERIFIED (ouvert dans Chrome et concordant) | MANUAL | INVALID | PENDING
+  linkReason  String?
+  textScore   Float?
+  matchStatus String   @default("PENDING")
+  matchScore  Float?
+  matchDetail String?
+  productId   String?  // produit Glacier créé à partir de cet élément
+  createdAt   DateTime @default(now())
+
+  @@index([jobId, role])
 }

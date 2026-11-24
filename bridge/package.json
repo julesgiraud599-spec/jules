@@ -1,0 +1,21 @@
+{
+  "name": "glacier-chrome-bridge",
+  "version": "1.0.0",
+  "description": "Serveur MCP local : relie Claude Code à l'extension Chrome Glacier (Vinted, AliExpress, Temu) et à Glacier.",
+  "type": "module",
+  "bin": {
+    "glacier-bridge": "index.js"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "token": "node index.js token"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "ws": "^8.23.0",
+    "zod": "^3.25.76"
+  }
+}

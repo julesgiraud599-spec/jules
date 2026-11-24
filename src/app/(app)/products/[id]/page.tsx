@@ -19,6 +19,7 @@ import {
   confirmOfferAction, invalidateOfferAction, recheckOfferAction, deleteOfferAction, fetchAliExpressAction, generateAnalysisAction, toggleSaveAction,
   deleteProductAction, updateProductAction,
 } from "@/app/actions";
+import { addToTodayAction } from "@/app/chrome-actions";
 
 export default async function ProductPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -84,7 +85,8 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             <a href={links.vinted} target="_blank" rel="noopener noreferrer" className="btn-ghost"><ExternalLink size={15} />VOIR LES ANNONCES VINTED</a>
           </div>
           {best && <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">Lien fournisseur : <LinkBadge status={best.linkStatus} /> · Correspondance : <MatchBadge status={best.matchStatus} score={best.matchScore} />{best.linkStatus !== "VERIFIED" && <span>· ouvrez le lien puis confirmez-le dans « Offres fournisseurs »</span>}</div>}
-          {r.blocker && <div className="mt-2 text-xs text-amber-300">Hors Top 10 : {r.blocker}.</div>}
+          {r.blocker ? <div className="mt-2 text-xs text-amber-300">Hors Top 10 : {r.blocker}.</div>
+            : <ActionForm action={addToTodayAction} className="mt-2">{hidden}<Submit variant="ghost" className="btn-sm">Ajouter au Top 10 du jour</Submit></ActionForm>}
         </div>
         <ScoreBadge score={r.score} confidence={r.confidence} size="lg" />
       </div>

@@ -3,12 +3,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import clsx from "clsx";
-import { LayoutDashboard, Search, CalendarCheck, Bookmark, TrendingUp, Calculator, History, Settings, Menu, X, Bell, LogOut } from "lucide-react";
+import { LayoutDashboard, Search, Globe, CalendarCheck, Bookmark, TrendingUp, Calculator, History, Settings, Menu, X, Bell, LogOut } from "lucide-react";
 import { logoutAction, markNotificationsReadAction } from "@/app/actions";
 
 const NAV = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/research", label: "Product Research", icon: Search },
+  { href: "/chrome", label: "Recherche Chrome", icon: Globe },
   { href: "/daily", label: "Top 10 du jour", icon: CalendarCheck },
   { href: "/saved", label: "Produits sauvegardés", icon: Bookmark },
   { href: "/trends", label: "Tendances Vinted", icon: TrendingUp },
