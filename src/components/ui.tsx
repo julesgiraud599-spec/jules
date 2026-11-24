@@ -76,3 +76,24 @@ export function Thumb({ src, alt, className }: { src: string | null | undefined;
     ? <img src={src} alt={alt} loading="lazy" referrerPolicy="no-referrer" className={clsx("object-cover bg-panel2", className)} />
     : <div className={clsx("grid place-items-center bg-panel2 text-[10px] text-muted", className)}>Pas de photo</div>;
 }
+
+const LINK_TONE: Record<string, [string, string]> = {
+  VERIFIED: ["Vérifié", "border-emerald-800/60 bg-emerald-950/40 text-emerald-300"],
+  MANUAL: ["À vérifier manuellement", "border-amber-800/60 bg-amber-950/30 text-amber-300"],
+  INVALID: ["Invalide", "border-red-900/60 bg-red-950/40 text-red-300"],
+  PENDING: ["Non vérifié", "border-line text-zinc-400"],
+};
+export function LinkBadge({ status }: { status: string }) {
+  const [label, tone] = LINK_TONE[status] ?? LINK_TONE.PENDING;
+  return <span className={clsx("badge", tone)}>{label}</span>;
+}
+const MATCH_TONE: Record<string, [string, string]> = {
+  MATCH: ["Même produit", "border-emerald-800/60 text-emerald-300"],
+  UNCERTAIN: ["Incertaine", "border-amber-800/60 text-amber-300"],
+  REJECTED: ["Produit différent", "border-red-900/60 text-red-300"],
+  PENDING: ["Non comparé", "border-line text-zinc-400"],
+};
+export function MatchBadge({ status, score }: { status: string; score: number | null }) {
+  const [label, tone] = MATCH_TONE[status] ?? MATCH_TONE.PENDING;
+  return <span className={clsx("badge", tone)}>{label}{score !== null && <span className="tabular-nums opacity-80">· {Math.round(score)}</span>}</span>;
+}

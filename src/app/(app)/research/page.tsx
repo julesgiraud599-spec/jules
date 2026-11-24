@@ -80,7 +80,7 @@ export default async function Research({ searchParams }: { searchParams: Promise
         </Empty>
       ) : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {products.map((p) => <ProductCard key={p.id} p={{ ...p, supplier: pickOffer(p.offers)?.supplier ?? null, saved: p.savedBy.length > 0 }} />)}
+          {products.map((p) => <ProductCard key={p.id} p={{ ...p, supplier: pickOffer(p.offers)?.supplier ?? null, linkStatus: pickOffer(p.offers)?.linkStatus ?? null, saved: p.savedBy.length > 0 }} />)}
         </div>
       )}
     </>

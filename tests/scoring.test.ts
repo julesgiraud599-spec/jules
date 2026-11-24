@@ -24,6 +24,12 @@ describe("computeScore — aucune donnée inventée", () => {
     expect(r.components.find((c) => c.key === "demand")!.score).toBeNull();
   });
 
+  it("les favoris ne sont jamais comptés comme des ventes", () => {
+    const r = computeScore([L({ favorites: 50 }), L({ favorites: 40 }), L({ favorites: 30 })], null, [], S);
+    expect(r.metrics.confirmedSales).toBe(0);
+    expect(r.metrics.sellThrough).toBe(0);
+  });
+
   it("ventes : non disponible sous 3 annonces, distingue ventes confirmées", () => {
     expect(computeScore([L({ status: "SOLD" }), L()], null, [], S).metrics.sellThrough).toBeNull();
     const r = computeScore([L({ status: "SOLD" }), L(), L(), L()], null, [], S);
@@ -40,13 +46,15 @@ describe("computeScore — aucune donnée inventée", () => {
 
   it("calcule marge, prix conseillé et score complet", () => {
     const listings = [L({ price: 10, favorites: 40, status: "SOLD", soldAt: day(2) }), L({ price: 10, favorites: 30 }), L({ price: 12, favorites: 50 })];
-    const r = computeScore(listings, 20, [{ price: 1.5, shipping: 0.5, confirmed: true, supplier: "TEMU" }], S);
+    const offer = { price: 1.5, shipping: 0.5, confirmed: false, supplier: "TEMU", linkStatus: "VERIFIED", matchStatus: "MATCH", matchScore: 88, available: true };
+    const r = computeScore(listings, 20, [offer], S);
     expect(r.metrics.recommendedPrice).toBe(9.5); // vendus en priorité : 10 * 0.95
     expect(r.metrics.purchaseCost).toBe(2);
     expect(r.metrics.grossMargin).toBe(7.5);
     expect(r.metrics.observedDaysToSell).toBe(2);
     expect(r.competitionLevel).toBe("Faible");
     expect(r.confidence).toBe(90); // tendance manquante
+    expect(r.blocker).toBeNull();
     expect(r.score).toBeGreaterThan(50);
     expect(r.score).toBeLessThanOrEqual(100);
   });
@@ -54,7 +62,29 @@ describe("computeScore — aucune donnée inventée", () => {
   it("pénalise un score fondé sur peu de données", () => {
     const thin = computeScore([L({ favorites: 40 })], null, [], S);
     expect(thin.rawScore).toBe(100);
-    expect(thin.score).toBe(Math.round(100 * (0.6 + 0.4 * 0.25)));
+    expect(thin.confidence).toBe(30);
+    expect(thin.score).toBe(Math.round(100 * (0.3 + 0.7 * 0.3)));
+    expect(thin.blocker).toBe("Aucune offre fournisseur");
+  });
+
+  it("sans favoris, le score est plafonné à 40", () => {
+    const offer = { price: 1, shipping: 0, confirmed: true, supplier: "TEMU", linkStatus: "VERIFIED", matchStatus: "MATCH", matchScore: 95, available: true };
+    const r = computeScore([L({ price: 20 })], null, [offer], S);
+    expect(r.score).toBeLessThanOrEqual(40);
+    expect(r.blocker).toBe("Aucun nombre de favoris relevé sur Vinted");
+  });
+
+  it("une offre au lien invalide ou à la correspondance incertaine n'est jamais utilisée", () => {
+    const bad = { price: 1, shipping: 0, confirmed: false, supplier: "TEMU", linkStatus: "INVALID", matchStatus: "MATCH", matchScore: 90 };
+    const unsure = { price: 1, shipping: 0, confirmed: false, supplier: "SHEIN", linkStatus: "VERIFIED", matchStatus: "UNCERTAIN", matchScore: 55 };
+    const r = computeScore([L({ favorites: 30 })], 10, [bad, unsure], S);
+    expect(r.metrics.purchaseCost).toBeNull();
+    expect(r.blocker).toBe("Aucune offre fournisseur ne correspond de façon fiable au produit Vinted");
+  });
+
+  it("une correspondance fiable mais un lien non vérifié bloque le Top 10", () => {
+    const manual = { price: 1, shipping: 0, confirmed: false, supplier: "TEMU", linkStatus: "MANUAL", matchStatus: "MATCH", matchScore: 80 };
+    expect(computeScore([L({ favorites: 30 })], 10, [manual], S).blocker).toBe("Le lien fournisseur n'est pas vérifié");
   });
 });
 
@@ -65,8 +95,12 @@ describe("helpers", () => {
     expect(recommendPrice([], [7, 9])).toBe(7.5);
     expect(recommendPrice([], [])).toBeNull();
   });
-  it("pickOffer privilégie les offres vérifiées", () => {
-    const o = pickOffer([{ price: 1, shipping: null, confirmed: false, supplier: "ALIEXPRESS" }, { price: 3, shipping: 0, confirmed: true, supplier: "SHEIN" }]);
+  it("pickOffer privilégie les liens vérifiés parmi les correspondances fiables", () => {
+    const o = pickOffer([
+      { price: 1, shipping: null, confirmed: false, supplier: "ALIEXPRESS", linkStatus: "MANUAL", matchStatus: "MATCH" },
+      { price: 3, shipping: 0, confirmed: false, supplier: "SHEIN", linkStatus: "VERIFIED", matchStatus: "MATCH" },
+      { price: 0.5, shipping: 0, confirmed: false, supplier: "TEMU", linkStatus: "VERIFIED", matchStatus: "UNCERTAIN" },
+    ]);
     expect(o!.supplier).toBe("SHEIN");
   });
   it("saleNet et summarize sans double comptage du stock", () => {

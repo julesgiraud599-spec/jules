@@ -7,13 +7,16 @@ import { scoreProduct } from "@/lib/engine";
 import { aliexpressConfigured } from "@/lib/aliexpress";
 import { aiConfigured, type Analysis } from "@/lib/ai";
 import { pickOffer } from "@/lib/scoring";
+import { LINK_STATUS_LABEL, type LinkStatus } from "@/lib/links";
+import { MATCH_LABEL, type MatchStatus } from "@/lib/matching";
+import { LinkBadge, MatchBadge } from "@/components/ui";
 import { eur, pct, num, dateFr, NA, CATEGORIES, SUPPLIER_LABEL, searchLinks } from "@/lib/format";
 import { PageHeader, Section, ScoreBadge, Level, SupplierBadge, Thumb, Empty } from "@/components/ui";
 import { ActionForm, Submit } from "@/components/action-form";
 import { Disclosure } from "@/components/disclosure";
 import {
   addListingAction, importListingsAction, deleteListingAction, setCompetitorCountAction, addOfferAction,
-  toggleOfferConfirmAction, deleteOfferAction, fetchAliExpressAction, generateAnalysisAction, toggleSaveAction,
+  confirmOfferAction, invalidateOfferAction, recheckOfferAction, deleteOfferAction, fetchAliExpressAction, generateAnalysisAction, toggleSaveAction,
   deleteProductAction, updateProductAction,
 } from "@/app/actions";
 
@@ -38,6 +41,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
   const analysis = p.analyses[0] ? (JSON.parse(p.analyses[0].content) as Analysis) : null;
   const links = searchLinks(p.keywords);
   const hidden = <input type="hidden" name="productId" value={p.id} />;
+  const refPhoto = p.listings.find((l) => l.photoUrl)?.photoUrl ?? null;
 
   const metrics: [string, React.ReactNode, string?][] = [
     ["Prix d'achat (port inclus)", eur(m.purchaseCost), best ? `${SUPPLIER_LABEL[best.supplier]}${best.confirmed ? "" : " · correspondance non vérifiée"}` : "Aucune offre liée"],
@@ -50,6 +54,9 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
     ["Vues", num(m.totalViews), m.totalViews === null ? "Rarement affichées par Vinted" : undefined],
     ["Ventes confirmées", `${m.confirmedSales} / ${m.observedListings} annonces`, "Annonces vues avec le statut « Vendu »"],
     ["Annonces concurrentes", num(m.competitorCount), p.competitorCountAt ? `Relevé le ${dateFr(p.competitorCountAt)}` : undefined],
+    ["Annonces similaires récentes", num(m.recentListings), p.recentListingsAt ? `Relevé le ${dateFr(p.recentListingsAt)}` : undefined],
+    ["Correspondance fournisseur", m.matchScore === null ? NA : `${Math.round(m.matchScore)} / 100`, best ? `${MATCH_LABEL[best.matchStatus as MatchStatus]} · lien ${LINK_STATUS_LABEL[best.linkStatus as LinkStatus].toLowerCase()}` : "Aucune offre fiable"],
+    ["Niveau de confiance de l'analyse", `${Math.round(r.confidence)} %`, "Part du score appuyée sur des données réelles"],
     ["Évolution de la demande", m.favoritesGrowthPerDay === null ? NA : `${m.favoritesGrowthPerDay > 0 ? "+" : ""}${m.favoritesGrowthPerDay} favoris / jour`],
     ["Rapport demande / offre", m.demandSupplyRatio === null ? NA : `${m.demandSupplyRatio} fav. / annonce`],
     ["Délai de vente observé", m.observedDaysToSell === null ? NA : `${m.observedDaysToSell} j`, m.observedDaysToSell !== null ? "Entre 1re observation et vente constatée" : undefined],
@@ -63,16 +70,21 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
 
       {/* En-tête */}
       <div className="card mb-6 flex flex-col gap-5 p-4 md:flex-row md:items-center">
-        <Thumb src={p.imageUrl ?? best?.imageUrl} alt={p.name} className="h-40 w-full rounded-lg md:h-28 md:w-28" />
+        <div className="flex gap-2">
+          <figure className="text-center"><Thumb src={refPhoto} alt="Annonce Vinted de référence" className="h-28 w-28 rounded-lg" /><figcaption className="mt-1 text-[10px] text-muted">Vinted (référence)</figcaption></figure>
+          <figure className="text-center"><Thumb src={best?.imageUrl ?? p.imageUrl} alt="Produit fournisseur" className="h-28 w-28 rounded-lg" /><figcaption className="mt-1 text-[10px] text-muted">{best ? SUPPLIER_LABEL[best.supplier] : "Fournisseur"}</figcaption></figure>
+        </div>
         <div className="flex-1">
           <h1 className="h1">{p.name}</h1>
           <div className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-muted">{p.category} · <SupplierBadge supplier={best?.supplier} /> · Demande <Level value={r.demandLevel} /> · Concurrence <Level value={r.competitionLevel} inverse /></div>
           <div className="mt-3 flex flex-wrap gap-2">
-            {best ? <a href={best.url} target="_blank" rel="noopener noreferrer" className="btn-primary"><ExternalLink size={15} />Voir le produit fournisseur</a>
-              : <span className="btn-ghost cursor-not-allowed opacity-60" title="Ajoutez d'abord une offre fournisseur">Aucun produit fournisseur lié</span>}
+            {best ? <a href={best.url} target="_blank" rel="noopener noreferrer" className="btn-primary"><ExternalLink size={15} />VOIR LE PRODUIT FOURNISSEUR</a>
+              : <span className="btn-ghost cursor-not-allowed opacity-60" title="Aucune offre dont la correspondance est fiable">Aucun produit fournisseur fiable</span>}
             <form action={toggleSaveAction}>{hidden}<button className="btn-ghost">{saved ? <><BookmarkCheck size={15} className="text-ice" />Sauvegardé</> : <><Bookmark size={15} />Sauvegarder</>}</button></form>
-            <a href={links.vinted} target="_blank" rel="noopener noreferrer" className="btn-ghost"><ExternalLink size={15} />Rechercher sur Vinted</a>
+            <a href={links.vinted} target="_blank" rel="noopener noreferrer" className="btn-ghost"><ExternalLink size={15} />VOIR LES ANNONCES VINTED</a>
           </div>
+          {best && <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">Lien fournisseur : <LinkBadge status={best.linkStatus} /> · Correspondance : <MatchBadge status={best.matchStatus} score={best.matchScore} />{best.linkStatus !== "VERIFIED" && <span>· ouvrez le lien puis confirmez-le dans « Offres fournisseurs »</span>}</div>}
+          {r.blocker && <div className="mt-2 text-xs text-amber-300">Hors Top 10 : {r.blocker}.</div>}
         </div>
         <ScoreBadge score={r.score} confidence={r.confidence} size="lg" />
       </div>
@@ -170,18 +182,35 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
             {!aliexpressConfigured() && <p className="mb-3 rounded-lg border border-line bg-panel2 p-2.5 text-xs text-muted">La recherche AliExpress automatique utilise l&apos;API officielle Affiliés. Elle s&apos;active avec <code className="text-ice">ALIEXPRESS_APP_KEY</code> et <code className="text-ice">ALIEXPRESS_APP_SECRET</code>. Temu et SHEIN n&apos;ont pas d&apos;API publique de catalogue, il faut ajouter leurs offres à la main.</p>}
             {p.offers.length === 0 ? <Empty title="Aucune offre liée">Sans offre fournisseur, la marge et le score restent incomplets et le produit ne peut pas entrer dans la sélection du jour.</Empty> : (
               <div className="-mx-4 overflow-x-auto">
-                <table className="w-full min-w-[620px]">
-                  <thead><tr><th className="th">Produit</th><th className="th">Fournisseur</th><th className="th text-right">Prix</th><th className="th text-right">Port</th><th className="th text-right">Ventes fourn.</th><th className="th">Correspondance</th><th className="th" /></tr></thead>
-                  <tbody>{p.offers.map((o) => (
+                <table className="w-full min-w-[760px]">
+                  <thead><tr><th className="th">Produit</th><th className="th text-right">Prix</th><th className="th">Lien</th><th className="th">Correspondance</th><th className="th">Actions</th></tr></thead>
+                  <tbody>{p.offers.map((o) => {
+                    const check = o.linkCheckDetail ? (JSON.parse(o.linkCheckDetail) as { steps: { step: string; ok: boolean | null; detail: string }[]; reason: string }) : null;
+                    const match = o.matchDetail ? (JSON.parse(o.matchDetail) as { signals: { label: string; score: number | null; detail: string }[]; visualNote?: string | null }) : null;
+                    return (
                     <tr key={o.id} className={best?.id === o.id ? "bg-ice-soft/20" : ""}>
-                      <td className="td max-w-[240px]"><div className="flex items-center gap-2"><Thumb src={o.imageUrl} alt="" className="h-9 w-9 shrink-0 rounded" /><a href={o.url} target="_blank" rel="noopener noreferrer" className="line-clamp-2 text-xs hover:text-ice">{o.title}</a></div></td>
-                      <td className="td"><SupplierBadge supplier={o.supplier} /><div className="mt-0.5 text-[10px] text-zinc-500">{o.source === "API" ? "API officielle" : "Saisie manuelle"}</div></td>
-                      <td className="td text-right tabular-nums">{eur(o.price)}</td>
-                      <td className="td text-right tabular-nums text-muted">{eur(o.shipping)}</td>
-                      <td className="td text-right tabular-nums text-muted">{num(o.salesVolume)}</td>
-                      <td className="td"><form action={toggleOfferConfirmAction}><input type="hidden" name="offerId" value={o.id} /><button className={`badge ${o.confirmed ? "border-emerald-800 text-emerald-300" : "border-amber-800 text-amber-300"}`}>{o.confirmed ? <><Check size={11} />Vérifiée</> : "À vérifier"}</button></form></td>
-                      <td className="td text-right"><form action={deleteOfferAction}><input type="hidden" name="offerId" value={o.id} /><button aria-label="Supprimer" className="text-zinc-600 hover:text-red-400"><Trash2 size={14} /></button></form></td>
-                    </tr>))}
+                      <td className="td max-w-[260px] align-top">
+                        <div className="flex items-center gap-2"><Thumb src={o.imageUrl} alt="" className="h-10 w-10 shrink-0 rounded" /><div className="min-w-0"><a href={o.url} target="_blank" rel="noopener noreferrer" className="line-clamp-2 text-xs hover:text-ice">{o.title}</a><div className="mt-0.5 flex flex-wrap items-center gap-1 text-[10px] text-zinc-500"><SupplierBadge supplier={o.supplier} />{o.source === "API" ? "API officielle" : "Saisie manuelle"}{o.salesVolume !== null && ` · ${num(o.salesVolume)} ventes fournisseur`}</div></div></div>
+                        <div className="mt-1 break-all text-[10px] text-zinc-600 select-all">{o.url}</div>
+                      </td>
+                      <td className="td text-right align-top tabular-nums">{eur(o.price)}{o.shipping !== null && <div className="text-[10px] text-muted">+ {eur(o.shipping)} port</div>}</td>
+                      <td className="td align-top">
+                        <LinkBadge status={o.linkStatus} />
+                        {check && <details className="mt-1 text-[11px] text-muted"><summary className="cursor-pointer">{check.reason}</summary><ul className="mt-1 space-y-0.5">{check.steps.map((st, i) => <li key={i}>{st.ok === true ? "✓" : st.ok === false ? "✗" : "?"} {st.step} : {st.detail}</li>)}</ul>{o.linkCheckedAt && <div className="mt-1 text-zinc-600">Contrôlé le {o.linkCheckedAt.toLocaleString("fr-FR")}</div>}</details>}
+                      </td>
+                      <td className="td align-top">
+                        <MatchBadge status={o.matchStatus} score={o.matchScore} />
+                        {match && <details className="mt-1 text-[11px] text-muted"><summary className="cursor-pointer">Détail</summary><ul className="mt-1 space-y-0.5">{match.signals.map((sg, i) => <li key={i}>{sg.label} : {sg.score === null ? NA : `${sg.score}/100`} — {sg.detail}</li>)}</ul>{match.visualNote && <div className="mt-1">Comparaison visuelle : {match.visualNote}</div>}</details>}
+                      </td>
+                      <td className="td align-top">
+                        <div className="flex flex-wrap gap-1">
+                          {!(o.confirmed && o.linkStatus === "VERIFIED") && <form action={confirmOfferAction}><input type="hidden" name="offerId" value={o.id} /><button className="btn-ghost btn-sm" title="Vous avez ouvert le lien et c'est bien le même produit"><Check size={12} />C&apos;est le bon produit</button></form>}
+                          {o.linkStatus !== "INVALID" && <form action={invalidateOfferAction}><input type="hidden" name="offerId" value={o.id} /><button className="btn-ghost btn-sm" title="Lien cassé ou mauvais produit">Lien invalide</button></form>}
+                          <ActionForm action={recheckOfferAction}><input type="hidden" name="offerId" value={o.id} /><Submit variant="ghost" className="btn-sm" pendingText="…">Revérifier</Submit></ActionForm>
+                          <form action={deleteOfferAction}><input type="hidden" name="offerId" value={o.id} /><button aria-label="Supprimer" className="p-1.5 text-zinc-600 hover:text-red-400"><Trash2 size={14} /></button></form>
+                        </div>
+                      </td>
+                    </tr>); })}
                   </tbody>
                 </table>
               </div>
@@ -190,7 +219,7 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
               <ActionForm action={addOfferAction} resetOnSuccess className="mt-3 grid gap-3 sm:grid-cols-6">
                 {hidden}
                 <div className="sm:col-span-2"><label className="label">Fournisseur *</label><select name="supplier" className="input">{Object.entries(SUPPLIER_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></div>
-                <div className="sm:col-span-4"><label className="label">Lien du produit *</label><input name="url" type="url" required className="input" placeholder="https://…" /></div>
+                <div className="sm:col-span-4"><label className="label">Lien de la fiche produit *</label><input name="url" type="url" required className="input" placeholder="https://www.temu.com/fr/…-g-601….html" /><p className="mt-1 text-[11px] text-zinc-500">Ouvrez la fiche du produit, puis copiez l&apos;adresse. Les pages de recherche, de catégorie ou d&apos;accueil sont refusées.</p></div>
                 <div className="sm:col-span-3"><label className="label">Titre</label><input name="title" className="input" /></div>
                 <div><label className="label">Prix unitaire (€) *</label><input name="price" type="number" step="0.01" min="0" required className="input" /></div>
                 <div><label className="label">Port / unité (€)</label><input name="shipping" type="number" step="0.01" min="0" className="input" /></div>
@@ -212,14 +241,18 @@ export default async function ProductPage({ params }: { params: Promise<{ id: st
                 </li>
               ))}
             </ul>
-            <p className="mt-4 border-t border-line pt-3 text-[11px] leading-relaxed text-zinc-500">Le score est la moyenne pondérée des critères qui ont des données. Les critères « Non disponible » sont exclus et le score est réduit en fonction des données manquantes (×{(0.6 + 0.4 * r.confidence / 100).toFixed(2)}).</p>
+            <p className="mt-4 border-t border-line pt-3 text-[11px] leading-relaxed text-zinc-500">Le score est la moyenne pondérée des critères qui ont des données. Les critères « Non disponible » sont exclus et le score est réduit en fonction des données manquantes (×{(0.3 + 0.7 * r.confidence / 100).toFixed(2)}). Sans favoris relevés, il ne peut pas dépasser 40.</p>
           </Section>
 
           <Section title="Concurrence sur Vinted">
             <p className="mb-3 text-xs text-muted">Ouvrez <a href={links.vinted} target="_blank" rel="noopener noreferrer" className="text-ice hover:underline">la recherche Vinted ↗</a> et reportez le nombre de résultats affiché.</p>
             <ActionForm action={setCompetitorCountAction} className="flex gap-2">
-              {hidden}<input name="competitorCount" type="number" min="0" defaultValue={p.competitorCount ?? ""} className="input" placeholder="Nombre d'annonces" /><Submit variant="ghost">OK</Submit>
+              {hidden}
+              <div className="flex-1"><label className="label">Annonces similaires</label><input name="competitorCount" type="number" min="0" defaultValue={p.competitorCount ?? ""} className="input" placeholder="Total" /></div>
+              <div className="flex-1"><label className="label">Publiées récemment</label><input name="recentListings" type="number" min="0" defaultValue={p.recentListings ?? ""} className="input" placeholder="7 derniers jours" /></div>
+              <div className="flex items-end"><Submit variant="ghost">OK</Submit></div>
             </ActionForm>
+            <p className="mt-2 text-[11px] text-zinc-500">« Publiées récemment » : triez la recherche Vinted par « Plus récents » et comptez les annonces de moins de 7 jours.</p>
             {p.competitorSnapshots.length > 1 && <ul className="mt-3 space-y-1 text-xs text-muted">{p.competitorSnapshots.map((s) => <li key={s.id} className="flex justify-between"><span>{dateFr(s.capturedAt)}</span><span className="tabular-nums">{s.count}</span></li>)}</ul>}
           </Section>
 

@@ -19,17 +19,57 @@ SaaS Next.js 15 / TypeScript / Prisma pour repérer des produits **sans marque**
 - Les tendances sont calculées sur **vos** observations. Ce n'est pas un échantillon représentatif de tout Vinted.
 - Si vous obtenez un jour une source Vinted autorisée (partenariat, export officiel), il suffit d'écrire des `VintedListing` + `ListingSnapshot`. Tout le reste fonctionne tel quel.
 
-## 2. Fonctionnalités
+## 2. Liens fournisseurs et correspondance Vinted (moteur vérifié)
+
+**Statut de chaque lien** : « Vérifié », « À vérifier manuellement » ou « Invalide » (`src/lib/links.ts`).
+
+1. URL valide, en https.
+2. Domaine appartenant au fournisseur (aliexpress.com, temu.com, shein.com/fr).
+3. Fiche produit uniquement : les pages de recherche, de catégorie et d'accueil sont refusées, ainsi que les boutiques Temu étrangères. Un identifiant produit doit figurer dans l'URL. L'URL est enregistrée sous sa forme canonique, sans paramètres de suivi.
+4. La page est chargée et chaque redirection est contrôlée : un 404, une redirection vers l'accueil ou vers un autre produit, ou la mention « plus au catalogue » rendent le lien invalide.
+5. Le titre de la page est comparé au produit attendu.
+6. Pour AliExpress, la vérification passe par l'API officielle (`productdetail.get`, avec livraison France) : elle confirme l'existence du produit, son prix actuel et sa disponibilité.
+
+« Vérifié » exige une preuve : réponse de l'API officielle, page lue et concordante, ou votre confirmation (« C'est le bon produit », après avoir ouvert le lien). Si le site bloque les robots, ce qui est le cas de Temu, SHEIN et des pages AliExpress, le lien reste « À vérifier manuellement ». Chaque nuit, les liens sont revérifiés.
+
+**Correspondance** (`src/lib/matching.ts`), notée sur 100 :
+- comparaison des photos Vinted et fournisseur par l'IA (vision), poids 50 ;
+- titre et caractéristiques, poids 25 ;
+- couleurs, poids 15 ;
+- dimensions, poids 10.
+
+Un verdict visuel « différent » écarte l'offre. Sans comparaison visuelle ni confirmation de votre part, la correspondance reste « incertaine ».
+
+**Top 10** : un produit n'y entre que s'il réunit des favoris Vinted relevés, une correspondance « même produit » et un lien « Vérifié ». S'il y a moins de 10 produits éligibles, la page l'indique avec les raisons d'exclusion. Elle n'est jamais complétée artificiellement.
+
+**Score sur 100** :
+
+| Critère | Poids |
+|---|---|
+| Demande observée | 30 |
+| Demande / concurrence | 20 |
+| Marge | 20 |
+| Fiabilité de la correspondance | 15 |
+| Stabilité de la tendance | 10 |
+| Disponibilité fournisseur | 5 |
+
+Les critères sans données sont exclus. Le score est ensuite multiplié par `0,3 + 0,7 × confiance`, et plafonné à 40 sans favoris relevés.
+
+**Limites** :
+- Vinted n'a pas d'API : les annonces sont relevées par vous.
+- Temu et SHEIN n'ont pas d'API catalogue : leurs liens se confirment à la main.
+- La recherche par image n'existe pas dans l'API Affiliés AliExpress standard. La correspondance visuelle se fait donc sur les candidats trouvés par mots-clés.
+
+## 3. Fonctionnalités
 
 - **Product Research** : fiches produit, annonces Vinted suivies avec historique des relevés, nombre d'annonces concurrentes, offres fournisseurs (API AliExpress ou saisie), filtres (fournisseur, catégorie, prix d'achat max, revente min/max, marge min, favoris, score, concurrence, ancienneté) et barre de recherche.
 - **Fiche produit** : photo, catégorie, fournisseur, bouton « Voir le produit fournisseur », prix d'achat, prix moyen Vinted, prix conseillé, marge brute et %, marge nette estimée, favoris, demande, concurrence, ventes confirmées, évolution, délai de vente observé, score sur 100 avec détail par critère et taux de données disponibles, date de détection, bouton favoris.
-- **Score sur 100** (`src/lib/scoring.ts`) : demande (favoris) 25, ventes confirmées 20, marge 20, concurrence 15, évolution 10, rapport demande/offre 10. C'est une moyenne pondérée **des seuls critères disponibles**, multipliée par `0,6 + 0,4 × confiance` pour pénaliser les fiches peu renseignées.
 - **10 produits par jour** (`src/lib/engine.ts → runDaily`) : rafraîchissement AliExpress, recalcul des scores, top 10 sans répétition (délai réglable, 14 jours par défaut), analyses IA, notification in-app et webhook (Discord, Slack, ntfy). Si moins de 10 produits sont éligibles, la sélection en contient moins, et c'est indiqué.
 - **IA (Claude)** : pour chaque produit, pourquoi il peut se vendre, tendance passagère ou durable, concurrence, prix conseillé, marge espérée, verdict, risques (dont la contrefaçon) et conseils d'annonce. Elle ne reçoit que les données réellement observées.
 - **Comptabilité** : ventes (option prélèvement de stock), frais, remboursements (avec remise en stock), dépenses, stock, cotisations micro-entreprise estimées, 7 graphiques, calendrier mensuel, exports CSV et Excel.
 - **Comptes** : inscription et connexion (bcrypt + session JWT httpOnly), toutes les données sont isolées par utilisateur.
 
-## 3. Installation
+## 4. Installation
 
 Mise en ligne (Vercel + Supabase) : voir **[DEPLOIEMENT.md](DEPLOIEMENT.md)**.
 
@@ -46,7 +86,7 @@ Variables optionnelles :
 - `ANTHROPIC_API_KEY` : analyses IA (modèle `claude-opus-5-5`, avec repli automatique en cas de refus).
 - `ALIEXPRESS_APP_KEY`, `ALIEXPRESS_APP_SECRET`, `ALIEXPRESS_TRACKING_ID` : compte sur https://openservice.aliexpress.com, application de type « Affiliates », puis récupération du tracking ID dans le portail Affiliés AliExpress.
 
-## 4. Tâche quotidienne
+## 5. Tâche quotidienne
 
 Trois façons de la lancer, au choix :
 1. **Vercel** : `vercel.json` appelle `/api/cron/daily` chaque jour à 6 h UTC. Définissez `CRON_SECRET` dans le projet : Vercel envoie automatiquement `Authorization: Bearer $CRON_SECRET`.
@@ -55,11 +95,11 @@ Trois façons de la lancer, au choix :
 
 Bouton manuel : page **Produits du jour**, « Lancer / Régénérer la sélection ». Le journal de chaque exécution se trouve dans **Historique**.
 
-## 5. Base de données
+## 6. Base de données
 
 PostgreSQL via Prisma. Supabase en production : `DATABASE_URL` = pooler (port 6543, `?pgbouncer=true`), `DIRECT_URL` = connexion directe ou « Session » (port 5432). Les tables sont créées automatiquement au déploiement (`npm run vercel-build` → `prisma db push`).
 
-## 6. Tests
+## 7. Tests
 
 ```bash
 npm test         # tests unitaires : score, absence de données inventées, marges, compta, signature AliExpress
@@ -67,7 +107,7 @@ npm run lint     # vérification TypeScript
 npm run build
 ```
 
-## 7. Rappels légaux
+## 8. Rappels légaux
 
 - Revendre régulièrement des articles neufs achetés pour la revente est une activité commerciale : compte **Vinted Pro** et statut de micro-entrepreneur.
 - Vinted transmet les données des vendeurs au fisc (DAC7 : au-delà de 30 ventes ou 2 000 € par an).

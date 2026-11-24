@@ -1,14 +1,14 @@
 import Link from "next/link";
 import { Bookmark, BookmarkCheck } from "lucide-react";
 import { eur, pct, num, dateFr } from "@/lib/format";
-import { ScoreBadge, Level, Thumb, SupplierBadge } from "./ui";
+import { ScoreBadge, Level, Thumb, SupplierBadge, LinkBadge } from "./ui";
 import { toggleSaveAction } from "@/app/actions";
 
 export type CardProduct = {
   id: string; name: string; category: string; imageUrl: string | null; score: number | null; scoreConfidence: number | null;
   purchasePrice: number | null; recommendedPrice: number | null; grossMargin: number | null; marginPct: number | null;
   totalFavorites: number | null; demandLevel: string | null; competitionLevel: string | null; createdAt: Date;
-  supplier?: string | null; saved?: boolean; rank?: number;
+  supplier?: string | null; linkStatus?: string | null; saved?: boolean; rank?: number; selectionBlocker?: string | null;
 };
 
 export function ProductCard({ p }: { p: CardProduct }) {
@@ -26,7 +26,7 @@ export function ProductCard({ p }: { p: CardProduct }) {
             <button aria-label={p.saved ? "Retirer des favoris" : "Sauvegarder"} className={p.saved ? "text-ice" : "text-zinc-500 hover:text-zinc-200"}>{p.saved ? <BookmarkCheck size={17} /> : <Bookmark size={17} />}</button>
           </form>
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">{p.category}{p.supplier !== undefined && <SupplierBadge supplier={p.supplier} />}</div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">{p.category}{p.supplier !== undefined && <SupplierBadge supplier={p.supplier} />}{p.linkStatus && <LinkBadge status={p.linkStatus} />}</div>
         <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
           <dt className="text-muted">Achat</dt><dd className="text-right tabular-nums">{eur(p.purchasePrice)}</dd>
           <dt className="text-muted">Revente conseillée</dt><dd className="text-right tabular-nums">{eur(p.recommendedPrice)}</dd>
@@ -36,6 +36,7 @@ export function ProductCard({ p }: { p: CardProduct }) {
         <div className="mt-3 flex flex-wrap items-center gap-1.5 border-t border-line pt-3 text-[11px] text-muted">
           Demande <Level value={p.demandLevel} /> · Concurrence <Level value={p.competitionLevel} inverse />
         </div>
+        {p.selectionBlocker && <div className="mt-2 text-[11px] text-amber-300/90">Hors Top 10 : {p.selectionBlocker}</div>}
         <div className="mt-2 text-[11px] text-zinc-600">Détecté le {dateFr(p.createdAt)}</div>
       </div>
     </div>

@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { createSession, destroySession, hashPassword, requireUser, verifyPassword } from "@/lib/auth";
-import { recomputeProduct, refreshAliExpress, generateAnalysis, runDaily } from "@/lib/engine";
+import { recomputeProduct, findAliExpressMatches, generateAnalysis, runDaily, verifyOffer, rematchOffer } from "@/lib/engine";
+import { staticCheck, LINK_STATUS_LABEL, type LinkStatus, type Supplier } from "@/lib/links";
 import { SUPPLIERS } from "@/lib/format";
 
 export type ActionState = { ok?: boolean; error?: string; message?: string } | undefined;
@@ -107,7 +108,8 @@ export async function setCompetitorCountAction(_: ActionState, f: FormData): Pro
     const user = await requireUser();
     const p = await ownProduct(user.id, str(f, "productId"));
     const count = optInt(f, "competitorCount");
-    await db.product.update({ where: { id: p.id }, data: { competitorCount: count, competitorCountAt: count === null ? null : new Date() } });
+    const recent = optInt(f, "recentListings");
+    await db.product.update({ where: { id: p.id }, data: { competitorCount: count, competitorCountAt: count === null ? null : new Date(), recentListings: recent, recentListingsAt: recent === null ? null : new Date() } });
     if (count !== null) await db.competitorSnapshot.create({ data: { productId: p.id, count } });
     await recomputeProduct(p.id);
     revalidatePath(`/products/${p.id}`);
@@ -196,33 +198,67 @@ export async function addOfferAction(_: ActionState, f: FormData): Promise<Actio
   return guard(async () => {
     const user = await requireUser();
     const p = await ownProduct(user.id, str(f, "productId"));
-    const supplier = str(f, "supplier");
+    const supplier = str(f, "supplier") as Supplier;
     if (!SUPPLIERS.includes(supplier as never)) return { error: "Fournisseur invalide." };
-    const url = optUrl(f, "url");
-    if (!url) return { error: "Le lien du produit fournisseur est obligatoire." };
-    const host = new URL(url).hostname;
-    const expected = { ALIEXPRESS: /aliexpress\./, TEMU: /temu\./, SHEIN: /shein\./ }[supplier as "TEMU"];
-    if (!expected.test(host)) return { error: `Ce lien ne correspond pas à ${supplier}.` };
-    await db.supplierOffer.upsert({
-      where: { productId_supplier_url: { productId: p.id, supplier, url } },
-      create: { productId: p.id, supplier, url, title: str(f, "title") || p.name, price: reqNum(f, "price", "Le prix d'achat"), shipping: optNum(f, "shipping"), imageUrl: optUrl(f, "imageUrl"), source: "MANUAL", confirmed: true },
-      update: { title: str(f, "title") || p.name, price: reqNum(f, "price", "Le prix d'achat"), shipping: optNum(f, "shipping"), imageUrl: optUrl(f, "imageUrl"), confirmed: true, fetchedAt: new Date() },
-    });
+    const raw = str(f, "url");
+    if (!raw) return { error: "Le lien du produit fournisseur est obligatoire." };
+    // Étapes 1-2 + forme de l'URL : un lien de recherche, d'accueil ou d'un autre site est refusé tout de suite.
+    const st = staticCheck(raw, supplier);
+    if (!st.ok) return { error: `Lien refusé : ${st.reason}. Copiez l'adresse de la fiche produit elle-même.` };
+    const url = st.canonicalUrl as string;
+    const title = str(f, "title") || p.name;
     const img = optUrl(f, "imageUrl");
+    const offer = await db.supplierOffer.upsert({
+      where: { productId_supplier_url: { productId: p.id, supplier, url } },
+      create: { productId: p.id, supplier, url, externalId: st.externalId, title, price: reqNum(f, "price", "Le prix d'achat"), shipping: optNum(f, "shipping"), imageUrl: img, source: "MANUAL", confirmed: false },
+      update: { title, price: reqNum(f, "price", "Le prix d'achat"), shipping: optNum(f, "shipping"), imageUrl: img, fetchedAt: new Date(), linkStatus: "PENDING", matchStatus: "PENDING" },
+    });
     if (!p.imageUrl && img) await db.product.update({ where: { id: p.id }, data: { imageUrl: img } });
+    const status = (await verifyOffer(offer.id)) as LinkStatus;
+    const m = await rematchOffer(offer.id);
     await recomputeProduct(p.id);
     revalidatePath(`/products/${p.id}`);
-    return { ok: true, message: "Offre fournisseur enregistrée." };
+    return { ok: true, message: `Offre enregistrée. Lien : ${LINK_STATUS_LABEL[status]}. Correspondance : ${m.score ?? "non mesurée"}${m.score !== null ? "/100" : ""}. ${status !== "VERIFIED" || m.status !== "MATCH" ? "Ouvrez le lien puis confirmez avec « C'est le bon produit » si c'est le cas." : ""}` };
   });
 }
 
-export async function toggleOfferConfirmAction(f: FormData) {
+async function ownOffer(userId: string, offerId: string) {
+  const o = await db.supplierOffer.findFirst({ where: { id: offerId, product: { userId } } });
+  if (!o) throw new Error("Offre introuvable.");
+  return o;
+}
+
+/** L'utilisateur a ouvert le lien et confirme que c'est le bon produit. */
+export async function confirmOfferAction(f: FormData) {
   const user = await requireUser();
-  const o = await db.supplierOffer.findFirst({ where: { id: str(f, "offerId"), product: { userId: user.id } } });
-  if (!o) return;
-  await db.supplierOffer.update({ where: { id: o.id }, data: { confirmed: !o.confirmed } });
+  const o = await ownOffer(user.id, str(f, "offerId"));
+  const detail = JSON.stringify({ steps: [{ step: "Confirmation de l'utilisateur", ok: true, detail: `Lien ouvert et produit confirmé le ${new Date().toLocaleDateString("fr-FR")}` }], reason: "Confirmé par vous" });
+  await db.supplierOffer.update({ where: { id: o.id }, data: { confirmed: true, linkStatus: "VERIFIED", linkVerifiedBy: "USER", linkCheckedAt: new Date(), linkCheckDetail: detail } });
+  await rematchOffer(o.id);
   await recomputeProduct(o.productId);
   revalidatePath(`/products/${o.productId}`);
+}
+
+/** L'utilisateur signale un lien cassé ou un mauvais produit. */
+export async function invalidateOfferAction(f: FormData) {
+  const user = await requireUser();
+  const o = await ownOffer(user.id, str(f, "offerId"));
+  const detail = JSON.stringify({ steps: [{ step: "Signalement de l'utilisateur", ok: false, detail: "Lien cassé ou mauvais produit" }], reason: "Signalé invalide par vous" });
+  await db.supplierOffer.update({ where: { id: o.id }, data: { confirmed: false, linkStatus: "INVALID", linkVerifiedBy: "USER", linkCheckedAt: new Date(), linkCheckDetail: detail } });
+  await recomputeProduct(o.productId);
+  revalidatePath(`/products/${o.productId}`);
+}
+
+export async function recheckOfferAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return guard(async () => {
+    const user = await requireUser();
+    const o = await ownOffer(user.id, str(f, "offerId"));
+    const status = (await verifyOffer(o.id)) as LinkStatus;
+    const m = await rematchOffer(o.id);
+    await recomputeProduct(o.productId);
+    revalidatePath(`/products/${o.productId}`);
+    return { ok: true, message: `Lien : ${LINK_STATUS_LABEL[status]} · correspondance ${m.score ?? "non mesurée"}${m.score !== null ? "/100" : ""}.` };
+  });
 }
 
 export async function deleteOfferAction(f: FormData) {
@@ -238,10 +274,10 @@ export async function fetchAliExpressAction(_: ActionState, f: FormData): Promis
   return guard(async () => {
     const user = await requireUser();
     const p = await ownProduct(user.id, str(f, "productId"));
-    const n = await refreshAliExpress(p.id);
+    const r = await findAliExpressMatches(p.id);
     await recomputeProduct(p.id);
     revalidatePath(`/products/${p.id}`);
-    return { ok: true, message: `${n} offre(s) AliExpress trouvée(s). Vérifiez la correspondance et cochez « vérifiée ».` };
+    return { ok: true, message: `${r.kept} produit(s) AliExpress conservé(s), ${r.rejected} écarté(s) car différents du produit Vinted.` };
   });
 }
 

@@ -12,7 +12,7 @@ export default async function Saved() {
       <PageHeader title="Produits sauvegardés" subtitle={`${saved.length} produit(s) dans vos favoris.`} />
       {saved.length === 0 ? <Empty title="Aucun produit sauvegardé">Cliquez sur l&apos;icône signet d&apos;une fiche produit pour l&apos;ajouter ici.</Empty> : (
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {saved.map((s) => <ProductCard key={s.productId} p={{ ...s.product, supplier: pickOffer(s.product.offers)?.supplier ?? null, saved: true }} />)}
+          {saved.map((s) => <ProductCard key={s.productId} p={{ ...s.product, supplier: pickOffer(s.product.offers)?.supplier ?? null, linkStatus: pickOffer(s.product.offers)?.linkStatus ?? null, saved: true }} />)}
         </div>
       )}
     </>

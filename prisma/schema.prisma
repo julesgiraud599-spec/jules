@@ -51,10 +51,14 @@ model Product {
   // Nombre d'annonces similaires sur Vinted (lu sur la page de recherche Vinted), null = non disponible
   competitorCount       Int?
   competitorCountAt     DateTime?
+  // Annonces similaires publiées récemment (ex. « nouveaux articles » des 7 derniers jours), null = non disponible
+  recentListings        Int?
+  recentListingsAt      DateTime?
 
   // Champs calculés (moteur de score), mis à jour à chaque recalcul
   score            Float?
   scoreConfidence  Float?   // part des critères disposant de données (0-100)
+  selectionBlocker String?  // raison pour laquelle le produit ne peut pas entrer dans le Top 10 (null = éligible)
   scoreBreakdown   String?  // JSON
   avgVintedPrice   Float?
   recommendedPrice Float?
@@ -127,16 +131,29 @@ model SupplierOffer {
   product     Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   supplier    String   // ALIEXPRESS | TEMU | SHEIN
   title       String
-  url         String
+  url         String   // URL canonique de la fiche produit (jamais une page de recherche)
+  affiliateUrl String? // lien de suivi affilié (AliExpress), redirige vers url
   price       Float
   shipping    Float?
   imageUrl    String?
-  externalId  String?
+  externalId  String?  // identifiant produit extrait de l'URL ou fourni par l'API
   salesVolume Int?     // fourni par l'API AliExpress (ventes 30 jours) quand disponible
   rating      String?
   source      String   // API | MANUAL
-  confirmed   Boolean  @default(false) // correspondance vérifiée par l'utilisateur
+  confirmed   Boolean  @default(false) // correspondance confirmée par l'utilisateur (« c'est le bon produit »)
   fetchedAt   DateTime @default(now())
+
+  // Vérification du lien : VERIFIED | MANUAL (à vérifier manuellement) | INVALID | PENDING
+  linkStatus      String    @default("PENDING")
+  linkVerifiedBy  String?   // API | HTTP | USER
+  linkCheckedAt   DateTime?
+  linkCheckDetail String?   // JSON : étapes de vérification et résultat de chacune
+  finalUrl        String?   // URL après redirections
+  available       Boolean?  // disponibilité fournisseur quand vérifiable
+  // Correspondance avec le produit Vinted : MATCH | UNCERTAIN | REJECTED | PENDING
+  matchStatus     String    @default("PENDING")
+  matchScore      Float?    // 0-100
+  matchDetail     String?   // JSON : signaux utilisés (visuel, titre, couleurs, dimensions)
 
   @@unique([productId, supplier, url])
 }
